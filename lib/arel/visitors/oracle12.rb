@@ -48,28 +48,8 @@ module Arel # :nodoc: all
         # tell ActiveRecord to limit us to 1000 ids at a time
         def visit_Arel_Nodes_HomogeneousIn(o, collector)
           in_clause_length = @connection.in_clause_length
-          values = o.casted_values.map { |v| @connection.quote(v) }
-          column_name = quote_table_name(o.table_name) + "." + quote_column_name(o.column_name)
-          operator =
-            if o.type == :in
-              " IN ("
-            else
-              " NOT IN ("
-            end
-
-          if !Array === values || values.length <= in_clause_length
-            collector << column_name
-            collector << operator
-
-            expr =
-              if values.empty?
-                @connection.quote(nil)
-              else
-                values.join(",")
-              end
-
-            collector << expr
-            collector << ")"
+          if !Array === o.casted_values || o.casted_values.length <= in_clause_length
+            upstream_visit_Arel_Nodes_HomogeneousIn_for_values(o, collector, o.casted_values)
           else
             separator =
               if o.type == :in
@@ -77,18 +57,32 @@ module Arel # :nodoc: all
               else
                 " AND "
               end
-            collector << "("
-            values.each_slice(in_clause_length).each_with_index do |valuez, i|
+
+            o.casted_values.each_slice(in_clause_length).each_with_index do |casted_values, i|
               collector << separator unless i == 0
-              collector << column_name
-              collector << operator
-              collector << valuez.join(",")
-              collector << ")"
+              upstream_visit_Arel_Nodes_HomogeneousIn_for_values(o, collector, casted_values)
             end
-            collector << ")"
+          end
+        end
+
+        def upstream_visit_Arel_Nodes_HomogeneousIn_for_values(o, collector, casted_values)
+          collector.preparable = false
+
+          visit o.left, collector
+
+          if o.type == :in
+            collector << " IN ("
+          else
+            collector << " NOT IN ("
           end
 
-          collector
+          if casted_values.empty?
+            collector << @connection.quote(nil)
+          else
+            collector.add_binds(casted_values, o.proc_for_binds) { |i| ":a#{i}"}
+          end
+
+          collector << ")"
         end
 
         def visit_Arel_Nodes_UpdateStatement(o, collector)
