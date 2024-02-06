@@ -12,7 +12,11 @@ module ActiveRecord
         def execute(sql, name = nil, async: false)
           sql = transform_query(sql)
 
-          log(sql, name, async: async) { @raw_connection.exec(sql) }
+          log(sql, name, async: async) do
+            with_raw_connection do |conn|
+              conn.exec(sql)
+            end
+          end
         end
 
         def internal_exec_query(sql, name = "SQL", binds = [], prepare: false, async: false)
@@ -23,12 +27,12 @@ module ActiveRecord
           log(sql, name, binds, type_casted_binds, async: async) do
             cursor = nil
             cached = false
-            with_retry do
+            with_raw_connection(allow_retry: true) do |conn|
               if without_prepared_statement?(binds)
-                cursor = @raw_connection.prepare(sql)
+                cursor = conn.prepare(sql)
               else
                 unless @statements.key? sql
-                  @statements[sql] = @raw_connection.prepare(sql)
+                  @statements[sql] = conn.prepare(sql)
                 end
 
                 cursor = @statements[sql]
@@ -100,12 +104,12 @@ module ActiveRecord
             cached = false
             cursor = nil
             returning_id_col = returning_id_index = nil
-            with_retry do
+            with_raw_connection(allow_retry: true) do |conn|
               if without_prepared_statement?(binds)
-                cursor = @raw_connection.prepare(sql)
+                cursor = conn.prepare(sql)
               else
                 unless @statements.key?(sql)
-                  @statements[sql] = @raw_connection.prepare(sql)
+                  @statements[sql] = conn.prepare(sql)
                 end
 
                 cursor = @statements[sql]
@@ -139,15 +143,15 @@ module ActiveRecord
           type_casted_binds = type_casted_binds(binds)
 
           log(sql, name, binds, type_casted_binds) do
-            with_retry do
+            with_raw_connection(allow_retry: true) do |conn|
               cached = false
               if without_prepared_statement?(binds)
-                cursor = @raw_connection.prepare(sql)
+                cursor = conn.prepare(sql)
               else
                 if @statements.key?(sql)
                   cursor = @statements[sql]
                 else
-                  cursor = @statements[sql] = @raw_connection.prepare(sql)
+                  cursor = @statements[sql] = conn.prepare(sql)
                 end
 
                 cursor.bind_params(type_casted_binds)
@@ -165,7 +169,7 @@ module ActiveRecord
         alias :exec_delete :exec_update
 
         def begin_db_transaction # :nodoc:
-          @raw_connection.autocommit = false
+          any_raw_connection.autocommit = false
         end
 
         def transaction_isolation_levels
@@ -184,15 +188,19 @@ module ActiveRecord
         end
 
         def commit_db_transaction # :nodoc:
-          @raw_connection.commit
+          with_raw_connection do |conn|
+            conn.commit
+          end
         ensure
-          @raw_connection.autocommit = true
+          any_raw_connection.autocommit = true
         end
 
         def exec_rollback_db_transaction # :nodoc:
-          @raw_connection.rollback
+          with_raw_connection do |conn|
+            conn.rollback
+          end
         ensure
-          @raw_connection.autocommit = true
+          any_raw_connection.autocommit = true
         end
 
         def create_savepoint(name = current_savepoint_name) # :nodoc:
@@ -266,20 +274,12 @@ module ActiveRecord
                 raise ActiveRecord::RecordNotFound, "statement #{sql} returned no rows"
               end
               lob = lob_record[col.name]
-              @raw_connection.write_lob(lob, value.to_s, col.type == :binary)
+              with_raw_connection do |conn|
+                conn.write_lob(lob, value.to_s, col.type == :binary)
+              end
             end
           end
         end
-
-        private
-          def with_retry
-            @raw_connection.with_retry do
-              yield
-            rescue
-              @statements.clear
-              raise
-            end
-          end
       end
     end
   end

@@ -463,11 +463,24 @@ module ActiveRecord
       end
 
       # Reconnects to the database.
-      def reconnect! # :nodoc:
+      def reconnect!(restore_transactions: false)# :nodoc:
         super
         @raw_connection.reset!
       rescue OracleEnhanced::ConnectionException => e
         @logger.warn "#{adapter_name} automatic reconnection failed: #{e.message}" if @logger
+      end
+
+      def retryable_connection_error?(exception)
+        super || (configured_to_retry? && oci_lost_connection_error?(exception))
+      end
+
+      def configured_to_retry?
+        auto_retry && any_raw_connection.autocommit?
+      end
+
+      def oci_lost_connection_error?(exception)
+        exception.message.match?(/OCIError/) &&
+          OCI8EnhancedAutoRecover::LOST_CONNECTION_ERROR_CODES.any? { |code| exception.message.include?(code.to_s) }
       end
 
       def clear_cache!(*args, **kwargs)
