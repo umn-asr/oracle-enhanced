@@ -65,6 +65,16 @@ describe "OracleEnhancedAdapter" do
         expect(te.name).to eq("full_name")
       end
 
+      it "should indentify the primary key colum" do
+        te = TestEmployee.connection.columns("test_employees").detect(&:auto_incremented_by_db?)
+        expect(te.name).to eq("id")
+      end
+
+      it "should indentify the primary key colum as auto_incremented_by_db" do
+        te = TestEmployee.connection.columns("test_employees").detect(&:auto_incremented_by_db?)
+        expect(te.name).to eq("id")
+      end
+
       it "should get columns from database at first time" do
         @conn.clear_table_columns_cache(:test_employees)
         expect(TestEmployee.connection.columns("test_employees").map(&:name)).to eq(@column_names)

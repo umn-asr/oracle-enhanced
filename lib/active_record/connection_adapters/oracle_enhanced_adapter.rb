@@ -578,7 +578,7 @@ module ActiveRecord
         select_value(<<~SQL.squish, "SCHEMA")
           SELECT LOWER(default_tablespace) FROM user_users
           WHERE username = SYS_CONTEXT('userenv', 'current_schema')
-        SQL
+          SQL
       end
 
       def column_definitions(table_name)
@@ -595,15 +595,34 @@ module ActiveRecord
                                    'CHAR', DECODE(char_used, 'C', char_length, data_length),
                                     NULL) AS limit,
                  DECODE(data_type, 'NUMBER', data_scale, NULL) AS scale,
-                 comments.comments as column_comment
-            FROM all_tab_cols cols, all_col_comments comments
-           WHERE cols.owner      = :owner
-             AND cols.table_name = :table_name
-             AND cols.hidden_column = 'NO'
-             AND cols.owner = comments.owner
-             AND cols.table_name = comments.table_name
-             AND cols.column_name = comments.column_name
-           ORDER BY cols.column_id
+                 comments.comments as column_comment,
+                 CASE WHEN primary_keys.column_name is null
+                   THEN 'N'
+                   ELSE 'Y'
+                 END as primary_key
+            FROM all_tab_cols cols
+                 INNER JOIN all_col_comments comments
+                 ON cols.owner = comments.owner
+                    AND cols.table_name = comments.table_name
+                    AND cols.column_name = comments.column_name
+                 LEFT JOIN (
+                   SELECT cc.column_name,
+                          c.table_name,
+                          c.owner
+                     FROM all_constraints c, all_cons_columns cc
+                    WHERE c.owner = :owner
+                      AND c.table_name = :table_name
+                      AND c.constraint_type = 'P'
+                      AND cc.owner = c.owner
+                      AND cc.constraint_name = c.constraint_name
+                 ) primary_keys
+                 ON cols.owner = primary_keys.owner
+                    AND cols.table_name = primary_keys.table_name
+                    AND cols.column_name = primary_keys.column_name
+          WHERE cols.owner      = :owner
+            AND cols.table_name = :table_name
+            AND cols.hidden_column = 'NO'
+          ORDER BY cols.column_id
         SQL
       end
 

@@ -670,7 +670,8 @@ module ActiveRecord
                              default_value,
                              type_metadata,
                              field["nullable"] == "Y",
-                             comment: field["column_comment"]
+                             comment: field["column_comment"],
+                             primary_key: field["primary_key"] == "Y"
             )
           end
 
