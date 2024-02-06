@@ -718,6 +718,7 @@ module ActiveRecord
       end
       alias table_alias_length max_identifier_length
       alias index_name_length max_identifier_length
+      alias max_index_name_size max_identifier_length
 
       def get_database_version
         valid_raw_connection.database_version
