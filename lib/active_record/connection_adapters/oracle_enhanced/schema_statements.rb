@@ -309,7 +309,7 @@ module ActiveRecord
           column_names = Array(column_name)
           index_name   = index_name(table_name, column: column_names)
 
-          options.assert_valid_keys(:unique, :order, :name, :where, :length, :internal, :tablespace, :options, :using)
+          options.assert_valid_keys(:unique, :order, :name, :where, :length, :internal, :tablespace, :options, :using, :nulls_not_distinct)
 
           index_type = options[:unique] ? "UNIQUE" : ""
           index_name = options[:name].to_s if options.key?(:name)
